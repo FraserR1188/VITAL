@@ -1,0 +1,11 @@
+.venv/
+tmp/
+__pycache__/
+*.pyc
+
+beam-web/node_modules/
+beam-web/dist/
+
+beam-api/db.sqlite3
+media/
+staticfiles/

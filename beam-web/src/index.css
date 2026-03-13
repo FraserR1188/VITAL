@@ -1,0 +1,528 @@
+:root {
+  font-family: Arial, sans-serif;
+  color: #1c1a1a;
+  background:
+    radial-gradient(circle at top left, rgba(255, 209, 102, 0.45), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(255, 107, 157, 0.22), transparent 28%),
+    linear-gradient(180deg, #fff7ef 0%, #fffdf9 100%);
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.marketing-panel,
+.workspace-panel,
+.phone-frame,
+.side-card {
+  border: 1px solid rgba(28, 26, 26, 0.08);
+  box-shadow: 0 24px 80px rgba(81, 50, 31, 0.08);
+}
+
+.marketing-panel,
+.workspace-panel {
+  border-radius: 32px;
+  background: rgba(255, 253, 249, 0.8);
+  backdrop-filter: blur(14px);
+}
+
+.marketing-panel {
+  padding: 1.75rem;
+}
+
+.brand-pill,
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 107, 53, 0.12);
+  color: #a8441a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.32rem 0.68rem;
+  text-transform: uppercase;
+}
+
+.brand-lockup h1,
+.section-header h2,
+.profile-hero h2,
+.side-card h2,
+.welcome-banner h2 {
+  font-family: Georgia, serif;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.brand-lockup h1 {
+  font-size: clamp(2.2rem, 5vw, 4.8rem);
+  margin-top: 0.85rem;
+  max-width: 11ch;
+}
+
+.brand-lockup p,
+.muted-copy,
+.feature-list p,
+.insight-card p {
+  color: #5f5651;
+}
+
+.insight-grid,
+.feature-list,
+.workspace-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.insight-grid {
+  margin-top: 1.6rem;
+}
+
+.insight-card,
+.feature-list div,
+.side-card,
+.post-card,
+.notification-card,
+.team-card,
+.compose-panel,
+.profile-note {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.insight-card,
+.feature-list div,
+.side-card {
+  padding: 1.1rem;
+}
+
+.insight-card strong,
+.feature-list span,
+.side-card h2,
+.post-header strong,
+.notification-card strong,
+.team-copy strong {
+  display: block;
+}
+
+.insight-card.emphasis {
+  background: linear-gradient(135deg, #ff6b35, #ff9b54);
+  color: #fff9f3;
+}
+
+.insight-card.emphasis p,
+.insight-card.emphasis .eyebrow {
+  color: inherit;
+}
+
+.feature-list span {
+  font-weight: 700;
+}
+
+.phone-stage {
+  display: flex;
+  justify-content: center;
+}
+
+.phone-frame {
+  width: min(100%, 430px);
+  min-height: 880px;
+  border-radius: 38px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 239, 0.96));
+  overflow: hidden;
+}
+
+.phone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 1.2rem 1rem;
+  border-bottom: 1px solid rgba(28, 26, 26, 0.08);
+}
+
+.wordmark {
+  display: block;
+  font-family: Georgia, serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #ff6b35;
+}
+
+.phone-header p,
+.post-header p,
+.notification-card p,
+.team-copy p,
+.profile-hero p,
+.invite-label {
+  margin: 0;
+  color: #726762;
+}
+
+.ghost-button,
+.primary-button,
+.nav-item,
+.pill,
+.step-chip,
+.category-tile,
+.reaction-row button {
+  border: none;
+  border-radius: 999px;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.ghost-button {
+  background: rgba(255, 107, 53, 0.08);
+  color: #b24a1e;
+  padding: 0.7rem 1rem;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #ff6b35, #ff8c42);
+  color: white;
+  padding: 0.85rem 1.15rem;
+  font-weight: 700;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.phone-content {
+  padding: 1rem;
+}
+
+.screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.welcome-banner,
+.profile-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255, 107, 53, 0.12), rgba(255, 209, 102, 0.35));
+}
+
+.pill-row,
+.step-row,
+.badge-row,
+.reaction-row,
+.composer-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pill {
+  background: white;
+  color: #6c625c;
+  padding: 0.65rem 0.95rem;
+}
+
+.pill.active {
+  background: var(--pill-accent);
+  color: #2c1b09;
+}
+
+.post-stack,
+.notification-stack,
+.team-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.post-card,
+.notification-card,
+.team-card {
+  padding: 1rem;
+}
+
+.post-header,
+.team-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.avatar,
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b35, #ff9b54);
+  color: white;
+  font-weight: 700;
+}
+
+.avatar {
+  width: 2.9rem;
+  height: 2.9rem;
+  flex-shrink: 0;
+}
+
+.profile-avatar {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.category-badge {
+  margin-left: auto;
+  background: color-mix(in srgb, var(--badge-accent) 28%, white);
+  color: #443222;
+  padding: 0.38rem 0.68rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.post-copy {
+  margin: 0.95rem 0;
+}
+
+.reaction-row {
+  align-items: center;
+}
+
+.reaction-row button {
+  background: rgba(255, 107, 53, 0.08);
+  color: #7e4a31;
+  padding: 0.55rem 0.8rem;
+}
+
+.reaction-row span {
+  margin-left: auto;
+  color: #7a6d67;
+  font-size: 0.92rem;
+}
+
+.compose-panel {
+  padding: 1rem;
+}
+
+.compose-header,
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.category-grid {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.category-tile {
+  text-align: left;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--tile-accent) 16%, white);
+}
+
+.category-tile.active,
+.step-chip.active,
+.nav-item.active {
+  outline: 2px solid #ff6b35;
+  outline-offset: -2px;
+}
+
+.step-chip,
+.nav-item {
+  background: rgba(255, 107, 53, 0.08);
+  color: #7e4a31;
+  padding: 0.68rem 0.92rem;
+}
+
+.composer-card {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.composer-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #6f6460;
+  font-size: 0.92rem;
+}
+
+.selected-tag {
+  text-transform: capitalize;
+}
+
+textarea,
+input {
+  width: 100%;
+  border: 1px solid rgba(28, 26, 26, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 253, 249, 0.95);
+  padding: 0.9rem 1rem;
+  resize: vertical;
+}
+
+textarea {
+  min-height: 160px;
+}
+
+.notification-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.notification-card.unread {
+  background: rgba(255, 107, 53, 0.12);
+}
+
+.unread-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #ff6b35;
+  flex-shrink: 0;
+}
+
+.search-input {
+  max-width: 170px;
+}
+
+.team-copy {
+  flex: 1;
+}
+
+.team-stats {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.88rem;
+  color: #6d625e;
+  text-align: right;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.stats-grid article {
+  padding: 1rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.stats-grid span {
+  display: block;
+  color: #776d67;
+}
+
+.stats-grid strong {
+  font-size: 1.9rem;
+}
+
+.badge-row {
+  gap: 0.5rem;
+}
+
+.badge {
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.16);
+  color: #5c4297;
+  font-weight: 700;
+}
+
+.workspace-panel {
+  padding: 1rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 700;
+}
+
+.invite-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admin-list {
+  padding-left: 1.2rem;
+  color: #5f5651;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0 1rem 1rem;
+}
+
+@media (min-width: 960px) {
+  .app-shell {
+    grid-template-columns: minmax(280px, 1.1fr) minmax(360px, 430px) minmax(280px, 1fr);
+    align-items: start;
+  }
+
+  .workspace-panel {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+@media (max-width: 959px) {
+  .phone-frame {
+    min-height: auto;
+  }
+
+  .invite-panel {
+    grid-template-columns: 1fr;
+  }
+}
