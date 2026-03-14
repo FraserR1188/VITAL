@@ -27,6 +27,35 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'beams_given', 'beams_received', 'role', 'organisation']
 
 
+class AdminUserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'email',
+            'first_name',
+            'last_name',
+            'full_name',
+            'job_title',
+            'department',
+            'role',
+            'is_active',
+            'beams_given',
+            'beams_received',
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.email
+
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['role', 'is_active']
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     invite_code = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, min_length=8)

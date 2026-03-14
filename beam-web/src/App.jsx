@@ -1,686 +1,580 @@
 import { useEffect, useMemo, useState } from 'react'
-import { categories, notifications as mockNotifications, organisation as mockOrganisation } from './data/mockData'
+import { notifications as mockNotifications, organisation as mockOrganisation } from './data/mockData'
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
-const inviteCode = 'MMC-BEAM-042'
-
-const categoryMeta = {
-  achievement: { icon: 'Award', accent: '#ffd166' },
-  kindness: { icon: 'Heart', accent: '#ff6b9d' },
-  personal: { icon: 'Spark', accent: '#a78bfa' },
-  fitness: { icon: 'Pulse', accent: '#06d6a0' },
-}
-
-const initialCredentials = {
-  email: 'rob@mmc.co.uk',
-  password: 'password1234',
+const defaultInviteCode = 'MMC-BEAM-042'
+const tabs = ['feed', 'celebrate', 'team', 'notifications', 'profile']
+const categories = ['all', 'achievement', 'kindness', 'personal', 'fitness']
+const meta = {
+  achievement: { label: 'Achievement', accent: '#ffd166' },
+  kindness: { label: 'Kindness', accent: '#ff6b9d' },
+  personal: { label: 'Personal', accent: '#a78bfa' },
+  fitness: { label: 'Fitness', accent: '#06d6a0' },
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState('feed')
+  const [activeView, setActiveView] = useState('feed')
   const [activeCategory, setActiveCategory] = useState('all')
-  const [composerStep, setComposerStep] = useState(1)
   const [selectedCategory, setSelectedCategory] = useState('achievement')
-  const [composerText, setComposerText] = useState(
-    'Shoutout to the team for pulling together before validation. Proud to work with people who always show up for each other.',
-  )
+  const [composerText, setComposerText] = useState('Shoutout to the team for pulling together before validation.')
   const [token, setToken] = useState(() => localStorage.getItem('beam-token') || '')
-  const [credentials, setCredentials] = useState(initialCredentials)
+  const [authMode, setAuthMode] = useState('signin')
+  const [credentials, setCredentials] = useState({ email: 'rob@mmc.co.uk', password: 'password1234' })
+  const [registration, setRegistration] = useState({
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    job_title: '',
+    department: '',
+    invite_code: defaultInviteCode,
+  })
   const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [invitePreview, setInvitePreview] = useState(null)
   const [user, setUser] = useState(null)
   const [feed, setFeed] = useState([])
   const [team, setTeam] = useState([])
   const [notifications, setNotifications] = useState(mockNotifications)
+  const [commentsByPost, setCommentsByPost] = useState({})
+  const [commentDrafts, setCommentDrafts] = useState({})
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [createdInvites, setCreatedInvites] = useState([])
+  const [adminUsers, setAdminUsers] = useState([])
+
+  const inviteCode = authMode === 'register' ? registration.invite_code || defaultInviteCode : defaultInviteCode
+  const isAuthed = Boolean(token && user)
+  const isAdmin = user?.role === 'admin'
+  const org = invitePreview?.organisation
+    ? { name: invitePreview.organisation.name, invitesPending: invitePreview.organisation.pending_invites }
+    : mockOrganisation
+  const posts = useMemo(() => feed.map(mapPost), [feed])
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadInvitePreview() {
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/invites/${inviteCode}/`)
-        if (!response.ok) {
-          return
-        }
-        const data = await response.json()
-        if (!cancelled) {
-          setInvitePreview(data)
-        }
-      } catch {
-        // Keep the static invite copy if the API is offline.
-      }
-    }
-
-    loadInvitePreview()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    fetch(`${apiBaseUrl}/api/invites/${inviteCode}/`).then(async (response) => {
+      setInvitePreview(response.ok ? await response.json() : null)
+    }).catch(() => setInvitePreview(null))
+  }, [inviteCode])
 
   useEffect(() => {
     if (!token) {
       setUser(null)
       setFeed([])
       setTeam([])
+      setCreatedInvites([])
+      setAdminUsers([])
       return
     }
-
-    let cancelled = false
-
-    async function loadAppData() {
-      setLoading(true)
-      try {
-        const [meResponse, feedResponse, teamResponse, notificationsResponse] = await Promise.all([
-          fetchWithAuth('/api/auth/me/', token),
-          fetchWithAuth(`/api/feed/${activeCategory === 'all' ? '' : `?category=${activeCategory}`}`, token),
-          fetchWithAuth('/api/team/', token),
-          fetchWithAuth('/api/notifications/', token),
-        ])
-
-        if (cancelled) {
-          return
-        }
-
-        setUser(meResponse)
-        setFeed(feedResponse)
-        setTeam(teamResponse.map(mapTeamMember))
-        setNotifications(
-          notificationsResponse.length > 0
-            ? notificationsResponse.map((item) => ({
-                id: item.id,
-                label: formatNotification(item),
-                time: formatRelativeTime(item.created_at),
-                unread: !item.read,
-              }))
-            : [],
-        )
-        setAuthError('')
-      } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Unable to reach the Beam API.'
-          setAuthError(message)
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    loadAppData()
-
-    return () => {
-      cancelled = true
-    }
+    setLoading(true)
+    Promise.all([
+      fetchWithAuth('/api/auth/me/', token),
+      fetchWithAuth(`/api/feed/${activeCategory === 'all' ? '' : `?category=${activeCategory}`}`, token),
+      fetchWithAuth('/api/team/', token),
+      fetchWithAuth('/api/notifications/', token),
+    ]).then(([me, feedData, teamData, notificationData]) => {
+      setUser(me)
+      setFeed(feedData)
+      setTeam(teamData.map(mapTeam))
+      setNotifications(notificationData.length ? notificationData.map(mapNotification) : [])
+    }).catch((error) => setAuthError(error instanceof Error ? error.message : 'Unable to reach the API.')).finally(() => setLoading(false))
   }, [token, activeCategory])
 
-  const visiblePosts = useMemo(() => feed.map(mapPost), [feed])
+  useEffect(() => {
+    if (!token || !isAdmin) return
+    Promise.all([fetchWithAuth('/api/invites/', token), fetchWithAuth('/api/users/', token)])
+      .then(([invites, users]) => {
+        setCreatedInvites(invites)
+        setAdminUsers(users)
+      })
+      .catch(() => {
+        setCreatedInvites([])
+        setAdminUsers([])
+      })
+  }, [token, isAdmin])
 
-  const organisation = invitePreview?.organisation
-    ? {
-        name: invitePreview.organisation.name,
-        invitesPending: invitePreview.organisation.pending_invites,
-      }
-    : mockOrganisation
-
-  async function handleSignIn(event) {
+  async function signIn(event) {
     event.preventDefault()
     setLoading(true)
     setAuthError('')
-
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/login/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      })
-
-      if (!response.ok) {
-        throw new Error('Sign-in failed. Check the seeded demo credentials and that the Django server is running.')
-      }
-
-      const data = await response.json()
-      localStorage.setItem('beam-token', data.access)
-      setToken(data.access)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Sign-in failed.'
-      setAuthError(message)
+    const response = await fetch(`${apiBaseUrl}/api/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    })
+    if (!response.ok) {
+      setAuthError('Sign-in failed. Check credentials and that Django is running.')
       setLoading(false)
-    }
-  }
-
-  async function handleCreatePost() {
-    if (!token || !composerText.trim()) {
       return
     }
+    const data = await response.json()
+    localStorage.setItem('beam-token', data.access)
+    setToken(data.access)
+    setActiveView('feed')
+  }
 
+  async function register(event) {
+    event.preventDefault()
     setLoading(true)
+    setAuthError('')
+    setAuthSuccess('')
     try {
-      await fetch(`${apiBaseUrl}/api/posts/`, {
+      await fetch(`${apiBaseUrl}/api/auth/register/`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          category: selectedCategory,
-          content: composerText.trim(),
-        }),
-      }).then(handleJsonResponse)
-
-      setComposerStep(1)
-      setComposerText('')
-      setActiveTab('feed')
-      const refreshedFeed = await fetchWithAuth('/api/feed/', token)
-      setFeed(refreshedFeed)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registration),
+      }).then(handleJson)
+      setAuthMode('signin')
+      setCredentials({ email: registration.email, password: registration.password })
+      setRegistration((current) => ({ ...current, email: '', password: '', first_name: '', last_name: '', job_title: '', department: '' }))
+      setAuthSuccess('Registration complete. You can now sign in.')
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Post creation failed.'
-      setAuthError(message)
+      setAuthError(error instanceof Error ? error.message : 'Registration failed.')
     } finally {
       setLoading(false)
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem('beam-token')
-    setToken('')
-    setUser(null)
-    setFeed([])
-    setTeam([])
+  async function createPost() {
+    if (!token || !composerText.trim()) return
+    const created = await fetch(`${apiBaseUrl}/api/posts/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: selectedCategory, content: composerText.trim() }),
+    }).then(handleJson)
+    setFeed((current) => [created, ...current])
+    setComposerText('')
+    setActiveView('feed')
   }
 
-  const isAuthenticated = Boolean(token && user)
-  const userName = user ? `${user.first_name} ${user.last_name}`.trim() : 'Pilot user'
+  async function toggleReaction(postId, reactionType) {
+    if (!token) return
+    const updated = await fetch(`${apiBaseUrl}/api/posts/${postId}/reactions/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reaction_type: reactionType }),
+    }).then(handleJson)
+    setFeed((current) => current.map((post) => (post.id === postId ? updated : post)))
+  }
+
+  async function toggleComments(postId) {
+    if (!token) return
+    if (commentsByPost[postId]) {
+      setCommentsByPost((current) => {
+        const next = { ...current }
+        delete next[postId]
+        return next
+      })
+      return
+    }
+    const comments = await fetchWithAuth(`/api/posts/${postId}/comments/`, token)
+    setCommentsByPost((current) => ({ ...current, [postId]: comments }))
+  }
+
+  async function createComment(postId) {
+    if (!token || !commentDrafts[postId]?.trim()) return
+    const comment = await fetch(`${apiBaseUrl}/api/posts/${postId}/comments/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: commentDrafts[postId].trim() }),
+    }).then(handleJson)
+    setCommentsByPost((current) => ({ ...current, [postId]: [...(current[postId] || []), comment] }))
+    setCommentDrafts((current) => ({ ...current, [postId]: '' }))
+    setFeed((current) => current.map((post) => (post.id === postId ? { ...post, comments_count: post.comments_count + 1 } : post)))
+  }
+
+  async function createInvite(event) {
+    event.preventDefault()
+    if (!token || !inviteEmail.trim()) return
+    const invite = await fetch(`${apiBaseUrl}/api/invites/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail.trim() }),
+    }).then(handleJson)
+    setCreatedInvites((current) => [invite, ...current])
+    setInviteEmail('')
+  }
+
+  async function updateUser(userId, updates) {
+    if (!token) return
+    const updated = await fetch(`${apiBaseUrl}/api/users/${userId}/`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).then(handleJson)
+    setAdminUsers((current) => current.map((member) => (member.id === userId ? { ...member, ...updated } : member)))
+  }
+
+  async function deletePost(postId) {
+    if (!token) return
+    const response = await fetch(`${apiBaseUrl}/api/posts/${postId}/`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) throw new Error('Post deletion failed.')
+    setFeed((current) => current.filter((post) => post.id !== postId))
+  }
+
+  if (!isAuthed) {
+    return (
+      <div className="landing-shell">
+        <section className="landing-hero">
+          <span className="hero-kicker">Beam</span>
+          <h1>Celebrate the people behind the work.</h1>
+          <p>Sign in to the pilot or join with an invite code to enter the product.</p>
+          <div className="hero-stats">
+            <div><span>Pilot focus</span><strong>MMC first</strong></div>
+            <div><span>Access</span><strong>Invite only</strong></div>
+            <div><span>Tone</span><strong>Warm and human</strong></div>
+          </div>
+        </section>
+
+        <section className="auth-panel">
+          <div className="auth-tabs">
+            <button type="button" className={authMode === 'signin' ? 'tab-button active' : 'tab-button'} onClick={() => setAuthMode('signin')}>Sign in</button>
+            <button type="button" className={authMode === 'register' ? 'tab-button active' : 'tab-button'} onClick={() => setAuthMode('register')}>Join with invite</button>
+          </div>
+          <div className="auth-card">
+            <span className="eyebrow">Pilot access</span>
+            <h2>{authMode === 'signin' ? 'Welcome back to Beam' : 'Create your Beam account'}</h2>
+            {authMode === 'signin' ? (
+              <form className="auth-form" onSubmit={signIn}>
+                <label>Work email<input type="email" value={credentials.email} onChange={(event) => setCredentials((current) => ({ ...current, email: event.target.value }))} /></label>
+                <label>Password<input type="password" value={credentials.password} onChange={(event) => setCredentials((current) => ({ ...current, password: event.target.value }))} /></label>
+                <button type="submit" className="primary-button" disabled={loading}>Sign in to Beam</button>
+              </form>
+            ) : (
+              <form className="auth-form" onSubmit={register}>
+                <label>Invite code<input type="text" value={registration.invite_code} onChange={(event) => setRegistration((current) => ({ ...current, invite_code: event.target.value.toUpperCase() }))} /></label>
+                <label>Work email<input type="email" value={registration.email} onChange={(event) => setRegistration((current) => ({ ...current, email: event.target.value }))} /></label>
+                <div className="split-grid">
+                  <label>First name<input type="text" value={registration.first_name} onChange={(event) => setRegistration((current) => ({ ...current, first_name: event.target.value }))} /></label>
+                  <label>Last name<input type="text" value={registration.last_name} onChange={(event) => setRegistration((current) => ({ ...current, last_name: event.target.value }))} /></label>
+                </div>
+                <label>Job title<input type="text" value={registration.job_title} onChange={(event) => setRegistration((current) => ({ ...current, job_title: event.target.value }))} /></label>
+                <label>Department<input type="text" value={registration.department} onChange={(event) => setRegistration((current) => ({ ...current, department: event.target.value }))} /></label>
+                <label>Password<input type="password" value={registration.password} onChange={(event) => setRegistration((current) => ({ ...current, password: event.target.value }))} /></label>
+                <button type="submit" className="primary-button" disabled={loading}>Join the workspace</button>
+              </form>
+            )}
+            {invitePreview?.organisation && authMode === 'register' ? <p className="success-copy">Invite is valid for {invitePreview.organisation.name}.</p> : null}
+            {authError ? <p className="error-copy">{authError}</p> : null}
+            {authSuccess ? <p className="success-copy">{authSuccess}</p> : null}
+            <p className="muted-copy">Demo credentials: `rob@mmc.co.uk` / `password1234`</p>
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   return (
-    <div className="app-shell">
-      <section className="marketing-panel">
-        <div className="brand-lockup">
-          <span className="brand-pill">Beam MVP</span>
-          <h1>Celebrate the people behind the work.</h1>
-          <p>
-            Responsive web-first prototype for the MMC pilot. Invite-only access, warm recognition,
-            and a feed designed to feel human from day one.
-          </p>
+    <div className="product-shell">
+      <header className="topbar">
+        <div className="brand-block">
+          <span className="wordmark">beam</span>
+          <span className="brand-meta">{org.name}</span>
         </div>
-
-        <div className="insight-grid">
-          <article className="insight-card emphasis">
-            <span className="eyebrow">Now live</span>
-            <strong>Front end + Django API</strong>
-            <p>The app now signs into the seeded backend and reads real feed, team, and notification data.</p>
-          </article>
-          <article className="insight-card">
-            <span className="eyebrow">Organisation model</span>
-            <strong>Invite-only by default</strong>
-            <p>Users join an existing workspace with an invite code and stay inside their organisation feed.</p>
-          </article>
-          <article className="insight-card">
-            <span className="eyebrow">Launch posture</span>
-            <strong>Built for proof first</strong>
-            <p>MMC is the test bed. Multi-company SaaS comes after validated product love and usage.</p>
-          </article>
+        <nav className="desktop-nav">
+          {(isAdmin ? [...tabs, 'admin'] : tabs).map((tab) => (
+            <button key={tab} type="button" className={activeView === tab ? 'nav-link active' : 'nav-link'} onClick={() => setActiveView(tab)}>
+              {tab === 'notifications' ? 'Alerts' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </nav>
+        <div className="topbar-actions">
+          <div className="user-chip"><span>{`${user.first_name} ${user.last_name}`.trim()}</span></div>
+          <button type="button" className="ghost-button" onClick={() => { localStorage.removeItem('beam-token'); setToken('') }}>Sign out</button>
         </div>
+      </header>
 
-        <div className="feature-list">
-          <div>
-            <span>Live demo credentials</span>
-            <p>`rob@mmc.co.uk` with `password1234` matches the seeded backend account.</p>
-          </div>
-          <div>
-            <span>Next backend phase</span>
-            <p>Comments, reactions, moderation actions, and invite creation are the next highest-value endpoints.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="phone-stage">
-        <div className="phone-frame">
-          <header className="phone-header">
+      <main className="app-layout">
+        <aside className="left-rail">
+          <article className="summary-card identity-card">
+            <div className="profile-avatar">{`${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase()}</div>
             <div>
-              <span className="wordmark">beam</span>
-              <p>{organisation.name}</p>
+              <span className="eyebrow">Logged in</span>
+              <h2>{`${user.first_name} ${user.last_name}`.trim()}</h2>
+              <p>{user.job_title || user.role}</p>
             </div>
-            {isAuthenticated ? (
-              <button className="ghost-button" onClick={handleLogout}>
-                Sign out
-              </button>
-            ) : (
-              <button className="ghost-button">Invite Only</button>
-            )}
-          </header>
+          </article>
+          <article className="summary-card">
+            <span className="eyebrow">Workspace</span>
+            <h3>{org.name}</h3>
+            <div className="metric-row">
+              <div><span>Unread alerts</span><strong>{notifications.filter((item) => item.unread).length}</strong></div>
+              <div><span>Pending invites</span><strong>{org.invitesPending}</strong></div>
+            </div>
+          </article>
+          <article className="summary-card">
+            <span className="eyebrow">Your Beam stats</span>
+            <div className="metric-row">
+              <div><span>Given</span><strong>{user.beams_given}</strong></div>
+              <div><span>Received</span><strong>{user.beams_received}</strong></div>
+            </div>
+          </article>
+        </aside>
 
-          <main className="phone-content">
-            {activeTab === 'feed' && (
-              <FeedScreen
-                activeCategory={activeCategory}
-                onCategoryChange={setActiveCategory}
-                posts={visiblePosts}
-                isAuthenticated={isAuthenticated}
-                isLoading={loading}
-              />
-            )}
-            {activeTab === 'celebrate' && (
-              <CelebrateScreen
-                composerStep={composerStep}
-                onComposerStepChange={setComposerStep}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-                composerText={composerText}
-                onComposerTextChange={setComposerText}
-                onSubmit={handleCreatePost}
-                isAuthenticated={isAuthenticated}
-                organisationName={organisation.name}
-              />
-            )}
-            {activeTab === 'notifications' && (
-              <NotificationsScreen items={notifications} isAuthenticated={isAuthenticated} />
-            )}
-            {activeTab === 'team' && <TeamScreen members={team} isAuthenticated={isAuthenticated} />}
-            {activeTab === 'profile' && <ProfileScreen user={user} isAuthenticated={isAuthenticated} />}
-          </main>
-
-          <nav className="bottom-nav">
-            {[
-              { id: 'feed', label: 'Feed' },
-              { id: 'celebrate', label: 'Celebrate' },
-              { id: 'notifications', label: 'Alerts' },
-              { id: 'team', label: 'Team' },
-              { id: 'profile', label: 'Profile' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                className={tab.id === activeTab ? 'nav-item active' : 'nav-item'}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </section>
-
-      <section className="workspace-panel">
-        <AuthCard
-          credentials={credentials}
-          onCredentialsChange={setCredentials}
-          onSubmit={handleSignIn}
-          authError={authError}
-          isLoading={loading}
-          isAuthenticated={isAuthenticated}
-          userName={userName}
-        />
-        <OrgControlCard organisation={organisation} />
-        <AdminCard />
-      </section>
+        <section className="content-panel">
+          {activeView === 'feed' ? (
+            <FeedSection
+              posts={posts}
+              activeCategory={activeCategory}
+              setActiveCategory={setActiveCategory}
+              isLoading={loading}
+              isAdmin={isAdmin}
+              commentsByPost={commentsByPost}
+              commentDrafts={commentDrafts}
+              setCommentDrafts={setCommentDrafts}
+              toggleReaction={toggleReaction}
+              toggleComments={toggleComments}
+              createComment={createComment}
+            />
+          ) : null}
+          {activeView === 'celebrate' ? (
+            <CelebrateSection
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              composerText={composerText}
+              setComposerText={setComposerText}
+              createPost={createPost}
+              loading={loading}
+            />
+          ) : null}
+          {activeView === 'team' ? <TeamSection team={team} /> : null}
+          {activeView === 'notifications' ? <NotificationSection notifications={notifications} /> : null}
+          {activeView === 'profile' ? <ProfileSection user={user} /> : null}
+          {activeView === 'admin' && isAdmin ? (
+            <AdminSection
+              org={org}
+              inviteEmail={inviteEmail}
+              setInviteEmail={setInviteEmail}
+              createInvite={createInvite}
+              createdInvites={createdInvites}
+              adminUsers={adminUsers}
+              visiblePosts={posts}
+              updateUser={updateUser}
+              deletePost={deletePost}
+              loading={loading}
+            />
+          ) : null}
+        </section>
+      </main>
+      <nav className="mobile-nav">
+        {(isAdmin ? [...tabs, 'admin'] : tabs).map((tab) => (
+          <button key={tab} type="button" className={activeView === tab ? 'mobile-nav-link active' : 'mobile-nav-link'} onClick={() => setActiveView(tab)}>
+            {tab === 'notifications' ? 'Alerts' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
 
-function AuthCard({
-  credentials,
-  onCredentialsChange,
-  onSubmit,
-  authError,
+function FeedSection({
+  posts,
+  activeCategory,
+  setActiveCategory,
   isLoading,
-  isAuthenticated,
-  userName,
+  isAdmin,
+  commentsByPost,
+  commentDrafts,
+  setCommentDrafts,
+  toggleReaction,
+  toggleComments,
+  createComment,
 }) {
   return (
-    <article className="side-card">
-      <span className="eyebrow">Auth experience</span>
-      <h2>{isAuthenticated ? `Signed in as ${userName}` : 'Email sign in for the pilot'}</h2>
-      <form className="auth-form" onSubmit={onSubmit}>
-        <label>
-          Work email
-          <input
-            type="email"
-            value={credentials.email}
-            onChange={(event) =>
-              onCredentialsChange((current) => ({ ...current, email: event.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={credentials.password}
-            onChange={(event) =>
-              onCredentialsChange((current) => ({ ...current, password: event.target.value }))
-            }
-          />
-        </label>
-        <button type="submit" className="primary-button" disabled={isLoading}>
-          {isAuthenticated ? 'Refresh session' : 'Sign in to Beam'}
-        </button>
-      </form>
-      {authError ? <p className="error-copy">{authError}</p> : null}
-      <p className="muted-copy">
-        Google OAuth is intentionally deferred until after the pilot learns what users actually need.
-      </p>
-    </article>
-  )
-}
-
-function OrgControlCard({ organisation }) {
-  return (
-    <article className="side-card">
-      <span className="eyebrow">Organisation onboarding</span>
-      <h2>Join with an invite</h2>
-      <div className="invite-panel">
-        <div>
-          <p className="invite-label">Workspace</p>
-          <strong>{organisation.name}</strong>
-        </div>
-        <div>
-          <p className="invite-label">Invite code</p>
-          <strong>{inviteCode}</strong>
-        </div>
-        <div>
-          <p className="invite-label">Pending invites</p>
-          <strong>{organisation.invitesPending}</strong>
-        </div>
+    <section className="page-shell">
+      <div className="page-header">
+        <div><span className="eyebrow">Feed</span><h1>What people are celebrating</h1></div>
+        <span className="page-meta">{posts.length} live posts</span>
       </div>
-      <p className="muted-copy">
-        Invite-only is the right call for the pilot. It keeps culture safe, avoids random signups, and mirrors how the first rollout will really happen.
-      </p>
-    </article>
-  )
-}
-
-function AdminCard() {
-  return (
-    <article className="side-card">
-      <span className="eyebrow">Admin controls</span>
-      <h2>Full control from day one</h2>
-      <ul className="admin-list">
-        <li>Invite or remove users</li>
-        <li>Promote members to admin</li>
-        <li>Delete posts and comments</li>
-        <li>Suspend accounts if needed</li>
-        <li>Correct category mistakes</li>
-      </ul>
-      <p className="muted-copy">The first backend slice should expose these actions behind an admin-only permission layer.</p>
-    </article>
-  )
-}
-
-function FeedScreen({ activeCategory, onCategoryChange, posts, isAuthenticated, isLoading }) {
-  return (
-    <div className="screen">
-      <section className="welcome-banner">
-        <div>
-          <span className="eyebrow">Pilot workspace</span>
-          <h2>Good things are happening at MMC today.</h2>
-        </div>
-        <strong>{isAuthenticated ? `${posts.length} live posts` : 'Sign in to view'}</strong>
-      </section>
-
       <div className="pill-row">
         {categories.map((category) => (
-          <button
-            key={category.id}
-            className={activeCategory === category.id ? 'pill active' : 'pill'}
-            style={{
-              '--pill-accent': category.accent,
-            }}
-            onClick={() => onCategoryChange(category.id)}
-          >
-            {category.label}
+          <button key={category} type="button" className={activeCategory === category ? 'pill active' : 'pill'} onClick={() => setActiveCategory(category)} style={category === 'all' ? undefined : { '--pill-accent': meta[category].accent }}>
+            {category === 'all' ? 'All' : meta[category].label}
           </button>
         ))}
       </div>
-
-      {!isAuthenticated ? (
-        <EmptyState title="Sign in to view the live feed" body="The mobile shell is ready. Once you sign in, this tab reads directly from the Django API." />
-      ) : isLoading ? (
-        <EmptyState title="Loading the feed" body="Pulling the latest Beams from MMC." />
-      ) : (
-        <div className="post-stack">
+      {isLoading ? <EmptyState title="Loading the feed" body="Pulling the latest Beams from MMC." /> : (
+        <div className="content-stack">
           {posts.map((post) => (
-            <article key={post.id} className="post-card">
+            <article key={post.id} className="post-card elevated">
               <div className="post-header">
                 <div className="avatar">{post.initials}</div>
-                <div>
-                  <strong>{post.author}</strong>
-                  <p>
-                    {post.role} - {post.time}
-                  </p>
-                </div>
-                <span
-                  className="category-badge"
-                  style={{ '--badge-accent': categoryMeta[post.category].accent }}
-                >
-                  {categoryMeta[post.category].icon}
-                </span>
+                <div><strong>{post.author}</strong><p>{post.role} · {post.time}</p></div>
+                <span className="category-badge" style={{ '--badge-accent': meta[post.category].accent }}>{meta[post.category].label}</span>
               </div>
               <p className="post-copy">{post.content}</p>
               <div className="reaction-row">
-                <button>Cheer {post.reactions.cheer}</button>
-                <button>Heart {post.reactions.heart}</button>
-                <button>Fire {post.reactions.fire}</button>
-                <span>{post.comments} comments</span>
+                {['cheer', 'heart', 'fire'].map((reactionType) => (
+                  <button key={reactionType} type="button" className={post.currentUserReactions.includes(reactionType) ? 'reaction-chip active' : 'reaction-chip'} onClick={() => toggleReaction(post.id, reactionType)}>
+                    {reactionType.charAt(0).toUpperCase() + reactionType.slice(1)} {post.reactions[reactionType]}
+                  </button>
+                ))}
+                <button type="button" className="comment-toggle" onClick={() => toggleComments(post.id)}>
+                  {commentsByPost[post.id] ? 'Hide comments' : `${post.comments} comments`}
+                </button>
               </div>
+              {commentsByPost[post.id] ? (
+                <div className="comments-panel">
+                  <div className="comment-stack">
+                    {commentsByPost[post.id].map((comment) => (
+                      <article key={comment.id} className="comment-card">
+                        <div className="avatar comment-avatar">{comment.author.initials}</div>
+                        <div className="comment-copy"><strong>{comment.author.full_name}</strong><p>{comment.content}</p></div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="comment-compose">
+                    <input type="text" value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} placeholder="Add a comment" />
+                    <button type="button" className="primary-button" onClick={() => createComment(post.id)}>Comment</button>
+                  </div>
+                </div>
+              ) : null}
+              {isAdmin ? <div className="post-admin-row"><span className="admin-note">Admin moderation enabled</span></div> : null}
             </article>
           ))}
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
-function CelebrateScreen({
-  composerStep,
-  onComposerStepChange,
-  selectedCategory,
-  onSelectCategory,
-  composerText,
-  onComposerTextChange,
-  onSubmit,
-  isAuthenticated,
-  organisationName,
-}) {
+function CelebrateSection({ selectedCategory, setSelectedCategory, composerText, setComposerText, createPost, loading }) {
   return (
-    <div className="screen">
-      <section className="compose-panel">
-        <div className="compose-header">
-          <span className="eyebrow">Celebrate flow</span>
-          <strong>Category - Write - Post</strong>
-        </div>
-        <div className="step-row">
-          <button
-            className={composerStep === 1 ? 'step-chip active' : 'step-chip'}
-            onClick={() => onComposerStepChange(1)}
-          >
-            1. Choose
+    <section className="page-shell">
+      <div className="page-header">
+        <div><span className="eyebrow">Celebrate</span><h1>Share a Beam</h1></div>
+      </div>
+      <div className="category-grid wide">
+        {categories.filter((category) => category !== 'all').map((category) => (
+          <button key={category} type="button" className={selectedCategory === category ? 'category-tile active' : 'category-tile'} style={{ '--tile-accent': meta[category].accent }} onClick={() => setSelectedCategory(category)}>
+            <strong>{meta[category].label}</strong>
+            <span>Warm, fast, positive posting</span>
           </button>
-          <button
-            className={composerStep === 2 ? 'step-chip active' : 'step-chip'}
-            onClick={() => onComposerStepChange(2)}
-          >
-            2. Compose
-          </button>
-        </div>
-        {!isAuthenticated ? (
-          <EmptyState title="Sign in to post" body="The create-post flow is connected and ready once the pilot user is authenticated." />
-        ) : composerStep === 1 ? (
-          <div className="category-grid">
-            {categories
-              .filter((category) => category.id !== 'all')
-              .map((category) => (
-                <button
-                  key={category.id}
-                  className={selectedCategory === category.id ? 'category-tile active' : 'category-tile'}
-                  style={{ '--tile-accent': category.accent }}
-                  onClick={() => onSelectCategory(category.id)}
-                >
-                  <strong>{category.label}</strong>
-                  <span>Warm, fast, positive posting</span>
-                </button>
-              ))}
-          </div>
-        ) : (
-          <div className="composer-card">
-            <div className="composer-topline">
-              <span>Posting to {organisationName}</span>
-              <span className="selected-tag">{selectedCategory}</span>
-            </div>
-            <textarea value={composerText} onChange={(event) => onComposerTextChange(event.target.value)} />
-            <div className="composer-actions">
-              <button className="ghost-button">Add @mention</button>
-              <button className="ghost-button">Upload image</button>
-            </div>
-            <button className="primary-button full-width" onClick={onSubmit} disabled={!composerText.trim()}>
-              Post your Beam
-            </button>
-          </div>
-        )}
-      </section>
-    </div>
-  )
-}
-
-function NotificationsScreen({ items, isAuthenticated }) {
-  if (!isAuthenticated) {
-    return <EmptyState title="Sign in to view alerts" body="Notifications are now backed by the API and will show live once you are authenticated." />
-  }
-
-  return (
-    <div className="screen">
-      <section className="section-header">
-        <div>
-          <span className="eyebrow">Notifications</span>
-          <h2>{items.filter((item) => item.unread).length} unread</h2>
-        </div>
-      </section>
-      <div className="notification-stack">
-        {items.map((item) => (
-          <article key={item.id} className={item.unread ? 'notification-card unread' : 'notification-card'}>
-            <div>
-              <strong>{item.label}</strong>
-              <p>{item.time}</p>
-            </div>
-            {item.unread && <span className="unread-dot" />}
-          </article>
         ))}
       </div>
-    </div>
-  )
-}
-
-function TeamScreen({ members, isAuthenticated }) {
-  if (!isAuthenticated) {
-    return <EmptyState title="Sign in to browse the team" body="This tab reads directly from the organisation user list once you are signed in." />
-  }
-
-  return (
-    <div className="screen">
-      <section className="section-header">
-        <div>
-          <span className="eyebrow">Team</span>
-          <h2>Discover your colleagues</h2>
+      <article className="compose-surface">
+        <div className="composer-topline"><span>Ready to post</span><span className="selected-tag">{selectedCategory}</span></div>
+        <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} />
+        <div className="composer-actions">
+          <button type="button" className="ghost-button">Add @mention</button>
+          <button type="button" className="ghost-button">Upload image</button>
         </div>
-        <input className="search-input" defaultValue="MMC pilot" readOnly />
-      </section>
-      <div className="team-stack">
-        {members.map((member) => (
-          <article key={member.id} className="team-card">
-            <div className="avatar">{member.initials}</div>
-            <div className="team-copy">
-              <strong>{member.name}</strong>
-              <p>{member.role}</p>
-            </div>
-            <div className="team-stats">
-              <span>Received {member.received}</span>
-              <span>Given {member.given}</span>
-            </div>
-          </article>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function ProfileScreen({ user, isAuthenticated }) {
-  if (!isAuthenticated || !user) {
-    return <EmptyState title="Sign in to load your profile" body="Profile stats now come from the authenticated user endpoint." />
-  }
-
-  const initials = `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase()
-
-  return (
-    <div className="screen">
-      <section className="profile-hero">
-        <div className="profile-avatar">{initials}</div>
-        <div>
-          <span className="eyebrow">Your profile</span>
-          <h2>{`${user.first_name} ${user.last_name}`.trim()}</h2>
-          <p>{user.job_title || user.role}</p>
-        </div>
-      </section>
-      <section className="stats-grid">
-        <article>
-          <span>Beams given</span>
-          <strong>{user.beams_given}</strong>
-        </article>
-        <article>
-          <span>Beams received</span>
-          <strong>{user.beams_received}</strong>
-        </article>
-      </section>
-      <section className="badge-row">
-        <span className="badge">First Beam</span>
-        <span className="badge">Culture Builder</span>
-        <span className="badge">On Fire</span>
-      </section>
-      <article className="side-card profile-note">
-        <span className="eyebrow">Profile direction</span>
-        <h2>Not a CV. A celebration reel.</h2>
-        <p>That product philosophy is clear in the copy, the stats, and the emotional tone of the page.</p>
+        <button type="button" className="primary-button full-width" onClick={createPost} disabled={loading || !composerText.trim()}>Post your Beam</button>
       </article>
-    </div>
+    </section>
   )
 }
 
-function EmptyState({ title, body }) {
+function TeamSection({ team }) {
   return (
-    <article className="empty-state">
-      <strong>{title}</strong>
-      <p>{body}</p>
-    </article>
+    <section className="page-shell">
+      <div className="page-header"><div><span className="eyebrow">Team</span><h1>Discover your colleagues</h1></div></div>
+      <div className="content-grid">
+        {team.map((member) => (
+          <article key={member.id} className="team-card elevated">
+            <div className="avatar">{member.initials}</div>
+            <div className="team-copy"><strong>{member.full_name}</strong><p>{member.job_title || member.role}</p></div>
+            <div className="team-stats"><span>Received {member.beams_received || member.received}</span><span>Given {member.beams_given || member.given}</span></div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function NotificationSection({ notifications }) {
+  return (
+    <section className="page-shell">
+      <div className="page-header"><div><span className="eyebrow">Alerts</span><h1>Notifications</h1></div></div>
+      <div className="content-stack">
+        {notifications.map((item) => (
+          <article key={item.id} className={item.unread ? 'notification-card unread elevated' : 'notification-card elevated'}>
+            <div><strong>{item.label}</strong><p>{item.time}</p></div>
+            {item.unread ? <span className="unread-dot" /> : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function ProfileSection({ user }) {
+  const initials = `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase()
+  return (
+    <section className="page-shell">
+      <div className="profile-hero profile-page-hero">
+        <div className="profile-avatar">{initials}</div>
+        <div><span className="eyebrow">Profile</span><h1>{`${user.first_name} ${user.last_name}`.trim()}</h1><p>{user.job_title || user.role}</p></div>
+      </div>
+      <section className="stats-grid">
+        <article><span>Beams given</span><strong>{user.beams_given}</strong></article>
+        <article><span>Beams received</span><strong>{user.beams_received}</strong></article>
+      </section>
+    </section>
+  )
+}
+
+function AdminSection({ org, inviteEmail, setInviteEmail, createInvite, createdInvites, adminUsers, visiblePosts, updateUser, deletePost, loading }) {
+  return (
+    <section className="page-shell">
+      <div className="page-header"><div><span className="eyebrow">Admin</span><h1>Command centre</h1></div><span className="page-meta">{org.name}</span></div>
+      <div className="admin-summary-grid">
+        <div><span>Members</span><strong>{adminUsers.length}</strong></div>
+        <div><span>Pending invites</span><strong>{org.invitesPending}</strong></div>
+      </div>
+      <div className="admin-layout">
+        <article className="admin-panel-block">
+          <strong>Create invite</strong>
+          <form className="auth-form" onSubmit={createInvite}>
+            <label>Invite teammate by email<input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="newstarter@mmc.co.uk" /></label>
+            <button type="submit" className="primary-button" disabled={loading || !inviteEmail.trim()}>Create invite</button>
+          </form>
+          <div className="invite-list">
+            {createdInvites.slice(0, 4).map((invite) => (
+              <div key={invite.id} className="invite-list-item"><strong>{invite.email || 'Open invite'}</strong><span>{invite.code}</span></div>
+            ))}
+          </div>
+        </article>
+        <article className="admin-panel-block">
+          <strong>People</strong>
+          <div className="admin-user-list">
+            {adminUsers.map((member) => (
+              <div key={member.id} className="admin-user-row">
+                <div><strong>{member.full_name}</strong><p>{member.job_title || member.email}</p></div>
+                <div className="admin-actions">
+                  <button type="button" className="ghost-button" onClick={() => updateUser(member.id, { role: member.role === 'admin' ? 'member' : 'admin' })}>{member.role === 'admin' ? 'Make member' : 'Make admin'}</button>
+                  <button type="button" className={member.is_active ? 'danger-button' : 'ghost-button'} onClick={() => updateUser(member.id, { is_active: !member.is_active })}>{member.is_active ? 'Suspend' : 'Restore'}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+      <article className="admin-panel-block">
+        <strong>Moderation queue</strong>
+        <div className="admin-post-list">
+          {visiblePosts.slice(0, 5).map((post) => (
+            <div key={post.id} className="admin-post-row">
+              <div><strong>{post.author}</strong><p>{post.content}</p></div>
+              <button type="button" className="danger-button" onClick={() => deletePost(post.id)}>Delete post</button>
+            </div>
+          ))}
+        </div>
+      </article>
+    </section>
   )
 }
 
 async function fetchWithAuth(path, token) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  return handleJsonResponse(response)
+  const response = await fetch(`${apiBaseUrl}${path}`, { headers: { Authorization: `Bearer ${token}` } })
+  return handleJson(response)
 }
 
-async function handleJsonResponse(response) {
-  if (!response.ok) {
-    let message = 'Beam API request failed.'
-    try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') {
-        message = body.detail
-      }
-    } catch {
-      // Keep the fallback message when the body is not JSON.
-    }
-
-    throw new Error(message)
-  }
-
+async function handleJson(response) {
+  if (!response.ok) throw new Error('Beam API request failed.')
   return response.json()
 }
 
@@ -695,60 +589,31 @@ function mapPost(post) {
     content: post.content,
     reactions: post.reactions,
     comments: post.comments_count,
+    currentUserReactions: post.current_user_reactions || [],
   }
 }
 
-function mapTeamMember(member) {
+function mapTeam(member) {
   const parts = member.full_name.split(' ')
-  return {
-    id: member.id,
-    name: member.full_name,
-    role: member.job_title || 'MMC colleague',
-    initials: `${parts[0]?.[0] || ''}${parts[1]?.[0] || ''}`.toUpperCase(),
-    given: member.beams_given,
-    received: member.beams_received,
-  }
+  return { ...member, initials: `${parts[0]?.[0] || ''}${parts[1]?.[0] || ''}`.toUpperCase() }
 }
 
-function formatNotification(item) {
-  if (item.type === 'reaction') {
-    return `${item.actor_name} reacted to your Beam`
+function mapNotification(item) {
+  return {
+    id: item.id,
+    label: item.type === 'reaction' ? `${item.actor_name} reacted to your Beam` : `${item.actor_name} sent activity`,
+    time: formatRelativeTime(item.created_at),
+    unread: !item.read,
   }
-  if (item.type === 'comment') {
-    return `${item.actor_name} commented on your Beam`
-  }
-  if (item.type === 'mention') {
-    return `${item.actor_name} mentioned you in a Beam`
-  }
-  return `${item.actor_name} sent you a Beam`
 }
 
 function formatRelativeTime(value) {
   const inputDate = new Date(value)
   const now = new Date()
   const diffMinutes = Math.round((now - inputDate) / 60000)
-
-  if (Number.isNaN(diffMinutes)) {
-    return 'Just now'
-  }
-
-  if (diffMinutes < 1) {
-    return 'Just now'
-  }
-
-  if (diffMinutes < 60) {
-    return `${diffMinutes} min ago`
-  }
-
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) {
-    return `${diffHours} hr ago`
-  }
-
-  return inputDate.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  })
+  if (Number.isNaN(diffMinutes) || diffMinutes < 1) return 'Just now'
+  if (diffMinutes < 60) return `${diffMinutes} min ago`
+  return `${Math.round(diffMinutes / 60)} hr ago`
 }
 
 export default App

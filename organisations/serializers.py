@@ -1,3 +1,5 @@
+import secrets
+
 from rest_framework import serializers
 
 from organisations.models import Invite, Organisation
@@ -24,3 +26,19 @@ class InviteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invite
         fields = ['id', 'code', 'email', 'created_at', 'accepted_at', 'revoked_at', 'organisation']
+
+
+class CreateInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Invite
+        fields = ['id', 'code', 'email', 'created_at', 'accepted_at', 'revoked_at']
+        read_only_fields = ['id', 'code', 'created_at', 'accepted_at', 'revoked_at']
+
+    def create(self, validated_data):
+        request = self.context['request']
+        return Invite.objects.create(
+            organisation=request.user.organisation,
+            created_by=request.user,
+            code=secrets.token_hex(4).upper(),
+            **validated_data,
+        )

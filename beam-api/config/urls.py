@@ -3,12 +3,14 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from accounts.views import MeView, RegisterView
-from organisations.views import InviteCodePreviewView, OrganisationViewSet
+from accounts.views import MeView, RegisterView, UserAdminViewSet
+from organisations.views import InviteCodePreviewView, InviteViewSet, OrganisationViewSet
 from social.views import FeedView, NotificationViewSet, PostViewSet, TeamView
 
 router = DefaultRouter()
+router.register('users', UserAdminViewSet, basename='user')
 router.register('organisations', OrganisationViewSet, basename='organisation')
+router.register('invites', InviteViewSet, basename='invite')
 router.register('posts', PostViewSet, basename='post')
 router.register('notifications', NotificationViewSet, basename='notification')
 
